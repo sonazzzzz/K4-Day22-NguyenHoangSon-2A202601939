@@ -76,12 +76,15 @@ assert torch.cuda.is_available(), "DPO needs a CUDA GPU. See HARDWARE-GUIDE.md."
 # sequences, not from a second copy of the weights.
 
 # %%
-from unsloth import FastLanguageModel
-from peft import PeftModel
+from unsloth import FastLanguageModel, PatchDPOTrainer
+from unsloth.chat_templates import get_chat_template
 
-# Policy — gets new DPO LoRA adapter on top of SFT LoRA
+# Call PatchDPOTrainer first
+PatchDPOTrainer()
+
+# Policy — load with Unsloth directly (loads base model + attaches SFT adapter seamlessly)
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name=BASE_MODEL,
+    model_name=str(SFT_PATH) if SFT_PATH.exists() else BASE_MODEL,
     max_seq_length=MAX_LEN,
     dtype=None,
     load_in_4bit=True,
@@ -89,13 +92,12 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
-# Load SFT adapter on top of base
-model = PeftModel.from_pretrained(model, str(SFT_PATH), is_trainable=True)
-print(f"Policy: {model.__class__.__name__} with SFT adapter loaded")
+tokenizer = get_chat_template(
+    tokenizer,
+    chat_template="qwen-2.5",
+)
 
-# %%
-# Wrap policy with NEW LoRA adapter for DPO updates (don't merge SFT — keep stacked)
-# Unsloth re-applies LoRA on top of the existing PeftModel.
+# Wrap policy with LoRA adapter for DPO updates using native Unsloth
 model = FastLanguageModel.get_peft_model(
     model,
     r=16,
@@ -163,6 +165,10 @@ print(f"Columns: {pref_ds.column_names}")
 
 # %%
 from trl import DPOTrainer
+from unsloth import PatchDPOTrainer
+
+# Patch TRL's DPOTrainer to use Unsloth's optimized kernels and fix T4 backward attention
+PatchDPOTrainer()
 
 trainer = DPOTrainer(
     model=model,

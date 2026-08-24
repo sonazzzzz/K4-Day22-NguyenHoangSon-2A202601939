@@ -41,7 +41,7 @@ else:  # BIGGPU
     PER_DEVICE_BATCH = 2
     GRAD_ACCUM = 4
 
-SFT_DATASET = os.environ.get("SFT_DATASET", "5CD-AI/Vietnamese-alpaca-cleaned")
+SFT_DATASET = os.environ.get("SFT_DATASET", "bkai-foundation-models/vi-alpaca")
 SFT_SLICE = 1000
 NUM_EPOCHS = 1
 
@@ -72,6 +72,7 @@ print(f"GPU: {gpu.name}  ({gpu.total_memory / 1e9:.1f} GB)")
 
 # %%
 from unsloth import FastLanguageModel
+from unsloth.chat_templates import get_chat_template
 
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name=BASE_MODEL,
@@ -84,6 +85,12 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
     print("Set tokenizer.pad_token = eos_token")
+
+# Set chat template for base model (Qwen 2.5 / ChatML)
+tokenizer = get_chat_template(
+    tokenizer,
+    chat_template="qwen-2.5",
+)
 
 # %%
 model = FastLanguageModel.get_peft_model(
@@ -106,7 +113,7 @@ print(f"Trainable params: {sum(p.numel() for p in model.parameters() if p.requir
 # %% [markdown]
 # ## 2. Load + format VN Alpaca slice
 #
-# `5CD-AI/Vietnamese-alpaca-cleaned` is a 50k-row VN Alpaca translation. Lab 21
+# `bkai-foundation-models/vi-alpaca` is a ~52k-row VN Alpaca dataset. Lab 21
 # uses 1k slice for the demo run; we match that exactly so reward gap is comparable.
 
 # %%
